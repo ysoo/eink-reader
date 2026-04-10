@@ -274,8 +274,26 @@
         const fd = new FormData();
         fd.append('file', file);
         const r = await fetch('/api/books/upload', {method:'POST', body: fd});
-        const d = await r.json();
-        setStatus('books-status', file.name + ' → ' + (d.pages ?? '?') + ' pages.');
+        const {job_id} = await r.json();
+
+        // Poll until processing completes
+        let job;
+        for (let i = 0; i < 60; i++) {
+          await new Promise(res => setTimeout(res, 2000));
+          job = await fetch('/api/books/jobs/' + job_id).then(r => r.json());
+          if (job.status === 'done') {
+            setStatus('books-status', file.name + ' → ' + job.pages + ' pages.');
+            break;
+          } else if (job.status === 'error') {
+            setStatus('books-status', 'Error: ' + job.error);
+            break;
+          } else {
+            setStatus('books-status', 'Processing ' + file.name + '…');
+          }
+        }
+        if (job && job.status === 'processing') {
+          setStatus('books-status', 'Timed out waiting for ' + file.name);
+        }
       }
       loadBooks();
     }

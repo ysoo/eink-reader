@@ -12,11 +12,12 @@
 # /sd/todo_dirty is an empty flag file that signals the app to upload
 # the current todo.txt on the next WiFi sync.
 
+from constants import STATE_TODO, STATE_MENU
+
 TODO_PATH  = '/sd/todo.txt'
 DIRTY_PATH = '/sd/todo_dirty'
 MAX_ITEMS  = 60
 MAX_TEXT   = 43
-
 
 def load():
     """Read todo.txt and return a list of {'text': str, 'done': bool}."""
@@ -34,15 +35,15 @@ def load():
     return items
 
 
-def save(items):
-    """Write items back to todo.txt and mark the file as dirty for upload."""
+def save(items, dirty=True):
+    """Write items back to todo.txt. Set dirty=False to skip the upload flag (e.g. after a server merge)."""
     with open(TODO_PATH, 'w') as f:
         for item in items[:MAX_ITEMS]:
             flag = '1' if item['done'] else '0'
             f.write('{}|{}\n'.format(flag, item['text'][:MAX_TEXT]))
-    # Touch the dirty flag so app._wifi_sync() uploads on next connect
-    with open(DIRTY_PATH, 'w') as f:
-        pass
+    if dirty:
+        with open(DIRTY_PATH, 'w') as f:
+            pass
 
 
 def merge_incoming(incoming_path, dest_path):
@@ -80,4 +81,50 @@ def merge_incoming(incoming_path, dest_path):
     except:
         return
 
-    save(merged)
+    save(merged, dirty=False)
+
+
+class TodoMixin:
+
+    def _open_todo(self):
+        import todo
+        self.todo_items  = todo.load()
+        self.todo_cursor = 0
+        self.state       = STATE_TODO
+        self._draw_todo(full=True)
+
+    def _handle_todo(self, action):
+        if not self.todo_items:
+            if action == 'KEY1_long':
+                self._close_todo()
+            return
+        if action == 'KEY0_short':
+            self.todo_cursor = max(0, self.todo_cursor - 1)
+            self._draw_todo()
+        elif action == 'KEY1_short':
+            self.todo_cursor = min(len(self.todo_items) - 1, self.todo_cursor + 1)
+            self._draw_todo()
+        elif action == 'KEY0_long':
+            import todo
+            self.todo_items[self.todo_cursor]['done'] ^= True
+            todo.save(self.todo_items)
+            self._draw_todo()
+        elif action == 'KEY1_long':
+            self._close_todo()
+
+    def _draw_todo(self, full=False):
+        lines = ['TODO LIST', '']
+        for i, item in enumerate(self.todo_items):
+            check  = '[x]' if item['done'] else '[ ]'
+            prefix = '>' if i == self.todo_cursor else ' '
+            lines.append('{} {} {}'.format(prefix, check, item['text'][:43]))
+        fn = self.display.full_refresh if full else self.display.show_lines
+        fn(lines, 'TODO', None)
+
+    def _close_todo(self):
+        del self.todo_items
+        self.todo_items = None
+        self.state      = STATE_MENU
+        self.books      = self._list_books()
+        self._clamp_menu()
+        self.draw_menu(full=True)
