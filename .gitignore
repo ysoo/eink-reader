@@ -1,0 +1,19 @@
+# Pico credentials — never commit
+config.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Server local env
+server/.env
+
+# Books on SD card (large binary files)
+*.bin
+*.mark
+
+# OS
+.DS_Store
+Thumbs.db

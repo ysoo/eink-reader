@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E-ink Reader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1a1a;
+      color: #f5f5f0;
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      letter-spacing: .05em;
+    }
+
+    nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid #1a1a1a;
+      background: #fff;
+    }
+
+    nav button {
+      padding: .75rem 1.5rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: .95rem;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    nav button.active {
+      border-bottom-color: #1a1a1a;
+      font-weight: 600;
+    }
+
+    main { max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+
+    .tab { display: none; }
+    .tab.active { display: block; }
+
+    h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+
+    /* Upload area */
+    .drop-zone {
+      border: 2px dashed #bbb;
+      border-radius: 6px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 1.5rem;
+      transition: border-color .15s;
+    }
+    .drop-zone.drag-over { border-color: #1a1a1a; }
+    .drop-zone input[type=file] { display: none; }
+
+    /* Book list */
+    .book-list { list-style: none; }
+    .book-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .6rem .5rem;
+      border-bottom: 1px solid #e5e5e0;
+    }
+    .book-list li:last-child { border-bottom: none; }
+
+    /* Todo list */
+    .todo-add {
+      display: flex;
+      gap: .5rem;
+      margin-bottom: 1rem;
+    }
+    .todo-add input { flex: 1; }
+    .todo-list { list-style: none; margin-bottom: 1rem; }
+    .todo-list li {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .5rem .25rem;
+      border-bottom: 1px solid #e5e5e0;
+    }
+    .todo-list li.done span { text-decoration: line-through; color: #888; }
+    .todo-list li span { flex: 1; }
+
+    /* Brain dump */
+    textarea {
+      width: 100%;
+      height: 160px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: .75rem;
+      font-size: .95rem;
+      resize: vertical;
+      margin-bottom: .75rem;
+    }
+
+    /* Buttons */
+    button.primary {
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      padding: .5rem 1.1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    button.primary:hover { background: #333; }
+    button.secondary {
+      background: none;
+      border: 1px solid #bbb;
+      padding: .4rem .9rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: .85rem;
+    }
+    button.secondary:hover { border-color: #555; }
+    button.icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: .2rem .4rem;
+      color: #555;
+    }
+    button.icon:hover { color: #c00; }
+
+    .status {
+      margin-top: .75rem;
+      font-size: .875rem;
+      color: #555;
+      min-height: 1.2em;
+    }
+
+    .send-all {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>E-ink Reader</header>
+
+  <nav>
+    <button class="active" onclick="switchTab('books', this)">Books</button>
+    <button onclick="switchTab('todo', this)">Todo</button>
+    <button onclick="switchTab('braindump', this)">Brain Dump</button>
+  </nav>
+
+  <main>
+    <!-- ── Books ── -->
+    <div id="tab-books" class="tab active">
+      <h2>Books</h2>
+
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".epub,.txt" multiple>
+        Drop .epub or .txt here, or click to browse
+      </div>
+
+      <div class="send-all">
+        <button class="secondary" onclick="sendAllBooks()">Send all to device</button>
+      </div>
+
+      <ul class="book-list" id="book-list">
+        <li>Loading…</li>
+      </ul>
+      <p class="status" id="books-status"></p>
+    </div>
+
+    <!-- ── Todo ── -->
+    <div id="tab-todo" class="tab">
+      <h2>Todo</h2>
+
+      <div class="todo-add">
+        <input type="text" id="new-todo" placeholder="New item…" maxlength="43"
+               onkeydown="if(event.key==='Enter') addTodoItem()">
+        <button class="primary" onclick="addTodoItem()">Add</button>
+      </div>
+
+      <ul class="todo-list" id="todo-list">
+        <li>Loading…</li>
+      </ul>
+
+      <button class="secondary" onclick="sendTodoToDevice()">Send to device</button>
+      <p class="status" id="todo-status"></p>
+    </div>
+
+    <!-- ── Brain dump ── -->
+    <div id="tab-braindump" class="tab">
+      <h2>Brain Dump</h2>
+      <p style="margin-bottom:.75rem;font-size:.9rem;color:#555;">
+        Type anything. AI will turn it into a todo list.
+      </p>
+      <textarea id="dump-text" placeholder="e.g. need to call dentist, pick up groceries, review the PR…"></textarea>
+      <button class="primary" onclick="submitDump()">Convert to todos</button>
+      <p class="status" id="dump-status"></p>
+
+      <ul class="todo-list" id="dump-result" style="margin-top:1rem;"></ul>
+      <div id="dump-actions" style="display:none; margin-top:.75rem;">
+        <button class="secondary" onclick="sendDumpToDevice()">Send to device</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ── Tab switching ─────────────────────────────────────────────────────
+    function switchTab(name, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      btn.classList.add('active');
+      if (name === 'books') loadBooks();
+      if (name === 'todo')  loadTodo();
+    }
+
+    // ── Books ─────────────────────────────────────────────────────────────
+    async function loadBooks() {
+      const list = document.getElementById('book-list');
+      list.innerHTML = '<li>Loading…</li>';
+      const books = await fetch('/api/books').then(r => r.json());
+      if (!books.length) { list.innerHTML = '<li>No books yet.</li>'; return; }
+      list.innerHTML = books.map(name => `
+        <li>
+          <span>${name}</span>
+          <div style="display:flex;gap:.4rem">
+            <button class="secondary" onclick="sendBook('${name}')">Send to device</button>
+            <button class="icon" title="Delete" onclick="deleteBook('${name}')">✕</button>
+          </div>
+        </li>`).join('');
+    }
+
+    async function sendBook(name) {
+      setStatus('books-status', 'Queuing ' + name + '…');
+      await fetch('/api/books/' + encodeURIComponent(name) + '/queue', {method:'POST'});
+      setStatus('books-status', name + ' queued.');
+    }
+
+    async function sendAllBooks() {
+      const books = await fetch('/api/books').then(r => r.json());
+      for (const b of books) await sendBook(b);
+    }
+
+    async function deleteBook(name) {
+      if (!confirm('Delete ' + name + '?')) return;
+      await fetch('/api/books/' + encodeURIComponent(name), {method:'DELETE'});
+      loadBooks();
+    }
+
+    // Upload via drop-zone
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      uploadFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
+
+    async function uploadFiles(files) {
+      for (const file of files) {
+        setStatus('books-status', 'Uploading ' + file.name + '…');
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await fetch('/api/books/upload', {method:'POST', body: fd});
+        const d = await r.json();
+        setStatus('books-status', file.name + ' → ' + (d.pages ?? '?') + ' pages.');
+      }
+      loadBooks();
+    }
+
+    // ── Todo ──────────────────────────────────────────────────────────────
+    let _todoItems = [];
+
+    async function loadTodo() {
+      _todoItems = await fetch('/api/todo').then(r => r.json());
+      renderTodoList(_todoItems, 'todo-list', toggleTodoItem, deleteTodoItem);
+    }
+
+    function renderTodoList(items, listId, onToggle, onDelete) {
+      const list = document.getElementById(listId);
+      if (!items.length) { list.innerHTML = '<li>No items.</li>'; return; }
+      list.innerHTML = items.map((item, i) => `
+        <li class="${item.done ? 'done' : ''}">
+          <input type="checkbox" ${item.done ? 'checked' : ''} onchange="${onToggle.name}(${i})">
+          <span>${item.text}</span>
+          ${onDelete ? `<button class="icon" onclick="${onDelete.name}(${i})">✕</button>` : ''}
+        </li>`).join('');
+    }
+
+    async function toggleTodoItem(i) {
+      _todoItems[i].done = !_todoItems[i].done;
+      await saveTodo();
+      renderTodoList(_todoItems, 'todo-list', toggleTodoItem, deleteTodoItem);
+    }
+
+    async function deleteTodoItem(i) {
+      _todoItems.splice(i, 1);
+      await saveTodo();
+      renderTodoList(_todoItems, 'todo-list', toggleTodoItem, deleteTodoItem);
+    }
+
+    async function addTodoItem() {
+      const input = document.getElementById('new-todo');
+      const text = input.value.trim().slice(0, 43);
+      if (!text) return;
+      _todoItems.push({text, done: false});
+      input.value = '';
+      await saveTodo();
+      renderTodoList(_todoItems, 'todo-list', toggleTodoItem, deleteTodoItem);
+    }
+
+    async function saveTodo() {
+      await fetch('/api/todo', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({items: _todoItems}),
+      });
+    }
+
+    async function sendTodoToDevice() {
+      setStatus('todo-status', 'Queueing todo…');
+      // Re-trigger the queue entry via braindump endpoint isn't appropriate here;
+      // instead POST an empty braindump won't do — queue the existing todo blob directly.
+      const r = await fetch('/api/todo/queue', {method:'POST'});
+      setStatus('todo-status', r.ok ? 'Todo queued for device.' : 'Error queueing.');
+    }
+
+    // ── Brain dump ────────────────────────────────────────────────────────
+    let _dumpItems = [];
+
+    async function submitDump() {
+      const text = document.getElementById('dump-text').value.trim();
+      if (!text) return;
+      setStatus('dump-status', 'Thinking…');
+      document.getElementById('dump-result').innerHTML = '';
+      document.getElementById('dump-actions').style.display = 'none';
+
+      const r = await fetch('/api/todo/braindump', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text}),
+      });
+      const d = await r.json();
+      _dumpItems = d.items;
+      setStatus('dump-status', _dumpItems.length + ' items generated.');
+      renderTodoList(_dumpItems, 'dump-result', () => {}, null);
+      document.getElementById('dump-actions').style.display = 'block';
+    }
+
+    async function sendDumpToDevice() {
+      setStatus('dump-status', 'Already queued when generated.');
+    }
+
+    // ── Utilities ─────────────────────────────────────────────────────────
+    function setStatus(id, msg) {
+      document.getElementById(id).textContent = msg;
+    }
+
+    // Initial load
+    loadBooks();
+  </script>
+</body>
+</html>
