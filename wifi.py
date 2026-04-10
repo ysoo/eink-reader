@@ -14,16 +14,17 @@ _wlan = network.WLAN(network.STA_IF)
 def connect(ssid, password, timeout_ms=15_000):
     """Activate the interface and join the network. Returns True on success."""
     _wlan.active(True)
-    if _wlan.isconnected():
+    if _wlan.isconnected() and _wlan.ifconfig()[0] != '0.0.0.0':
         return True
     _wlan.connect(ssid, password)
     deadline = utime.ticks_ms() + timeout_ms
-    while not _wlan.isconnected():
+    while True:
         if utime.ticks_diff(deadline, utime.ticks_ms()) <= 0:
             _wlan.active(False)
             return False
+        if _wlan.isconnected() and _wlan.ifconfig()[0] != '0.0.0.0':
+            return True
         utime.sleep_ms(100)
-    return True
 
 
 def disconnect():
@@ -69,7 +70,7 @@ def post_file(url, src_path, chunk=512):
     # so we read in chunks and send with Content-Length pre-set.
     import uos
     size = uos.stat(src_path)[6]
-    headers = {'Content-Type': 'text/plain', 'Content-Length': str(size)}
+    headers = {'Content-Type': 'text/plain'}
 
     # Build socket manually to stream without loading the whole file.
     # Fall back to full-read if the file is small enough (< 8 KB).

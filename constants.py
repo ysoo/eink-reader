@@ -6,7 +6,6 @@ STATE_TODO   = 2
 
 BOOKS_DIR    = '/sd/books'
 TODO_PATH    = '/sd/todo.txt'
-TODO_DIRTY   = '/sd/todo_dirty'
 
 MENU_SYNC    = '[ Sync ]'
 MENU_TODO    = '[ Todo ]'

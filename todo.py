@@ -15,7 +15,6 @@
 from constants import STATE_TODO, STATE_MENU
 
 TODO_PATH  = '/sd/todo.txt'
-DIRTY_PATH = '/sd/todo_dirty'
 MAX_ITEMS  = 60
 MAX_TEXT   = 43
 
@@ -35,15 +34,12 @@ def load():
     return items
 
 
-def save(items, dirty=True):
+def save(items):
     """Write items back to todo.txt. Set dirty=False to skip the upload flag (e.g. after a server merge)."""
     with open(TODO_PATH, 'w') as f:
         for item in items[:MAX_ITEMS]:
             flag = '1' if item['done'] else '0'
             f.write('{}|{}\n'.format(flag, item['text'][:MAX_TEXT]))
-    if dirty:
-        with open(DIRTY_PATH, 'w') as f:
-            pass
 
 
 def merge_incoming(incoming_path, dest_path):
@@ -81,7 +77,7 @@ def merge_incoming(incoming_path, dest_path):
     except:
         return
 
-    save(merged, dirty=False)
+    save(merged)
 
 
 class TodoMixin:
@@ -113,13 +109,13 @@ class TodoMixin:
             self._close_todo()
 
     def _draw_todo(self, full=False):
-        lines = ['TODO LIST', '']
+        lines = ["TODO LIST", '']
         for i, item in enumerate(self.todo_items):
             check  = '[x]' if item['done'] else '[ ]'
             prefix = '>' if i == self.todo_cursor else ' '
             lines.append('{} {} {}'.format(prefix, check, item['text'][:43]))
         fn = self.display.full_refresh if full else self.display.show_lines
-        fn(lines, 'TODO', None)
+        fn(lines, "YI XIAN'S TODO", None)
 
     def _close_todo(self):
         del self.todo_items

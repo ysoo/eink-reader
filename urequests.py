@@ -62,6 +62,7 @@ def request(method, url, data=None, headers=None):
     s = usocket.socket(ai[0], ai[1], ai[2])
     try:
         s.connect(ai[-1])
+        s.settimeout(45)
         if proto == 'https:':
             if ssl is None:
                 raise OSError('no SSL module available for HTTPS')

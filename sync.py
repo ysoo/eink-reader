@@ -1,5 +1,4 @@
-from constants import BOOKS_DIR, TODO_PATH, TODO_DIRTY
-
+from constants import BOOKS_DIR, TODO_PATH
 
 class SyncMixin:
 
@@ -23,9 +22,10 @@ class SyncMixin:
             return
 
         try:
+            _step = 'get queue'
             queue = wifi.get_json(config.SERVER_URL + '/api/queue')
 
-            for item in queue:
+            for item in (queue if isinstance(queue, list) else []):
                 try:
                     if item['type'] == 'book':
                         dest = BOOKS_DIR + '/' + item['name']
@@ -38,16 +38,20 @@ class SyncMixin:
                 except Exception:
                     pass  # Skip failed items; ack still clears the queue
 
-            # Upload dirty todo before disconnecting
+            # Upload todo if it exists (merge on server is idempotent)
             try:
-                _os.stat(TODO_DIRTY)
+                _os.stat(TODO_PATH)
+            except OSError:
+                pass  # no todo file yet, skip
+            else:
+                _step = 'post todo'
                 wifi.post_file(config.SERVER_URL + '/api/todo/sync', TODO_PATH)
-                _os.remove(TODO_DIRTY)
-            except:
-                pass
 
+            _step = 'ack'
             wifi.get_json(config.SERVER_URL + '/api/queue/ack')
 
+        except Exception as e:
+            raise Exception(_step + ': ' + str(e))
         finally:
             wifi.disconnect()   # always free the ~50 KB, even on error
 
